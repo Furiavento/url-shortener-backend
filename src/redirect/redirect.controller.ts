@@ -1,10 +1,12 @@
 import { Controller, Get, Logger, Param, Req, Res } from '@nestjs/common';
+import { ApiExcludeController } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import { AnalyticsService } from '../analytics/analytics.service.js';
 import { Public } from '../common/decorators/public.decorator.js';
 import { UrlsService } from '../urls/urls.service.js';
 
 /** Served at the root: RedirectModule is not mounted under /api (see app.module.ts). */
+@ApiExcludeController()
 @Public()
 @Controller()
 export class RedirectController {

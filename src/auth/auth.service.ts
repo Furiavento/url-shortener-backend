@@ -9,6 +9,7 @@ import { isUniqueViolation } from '../common/db-errors.js';
 import type { JwtPayload } from '../common/decorators/current-user.decorator.js';
 import type { Env } from '../config/env.js';
 import { type PublicUser, UsersService } from '../users/users.service.js';
+import type { AuthResponseDto } from './dto/auth-response.dto.js';
 import type { LoginDto } from './dto/login.dto.js';
 import type { RegisterDto } from './dto/register.dto.js';
 import { hashPassword, verifyPassword } from './password.js';
@@ -17,15 +18,7 @@ import {
   RefreshTokensService,
 } from './refresh-tokens.service.js';
 
-/** Body returned to the client; the refresh token travels in a cookie. */
-export interface AuthResponse {
-  accessToken: string;
-  /** Access token lifetime in seconds. */
-  expiresIn: number;
-  user: PublicUser;
-}
-
-export interface AuthResult extends AuthResponse {
+export interface AuthResult extends AuthResponseDto {
   refresh: IssuedRefreshToken;
 }
 

@@ -16,18 +16,13 @@ import { type Url, urls } from '../database/schema.js';
 import type { CreateUrlDto } from './dto/create-url.dto.js';
 import type { ListUrlsQuery } from './dto/list-urls.query.js';
 import type { UpdateUrlDto } from './dto/update-url.dto.js';
+import type {
+  PaginatedUrlsDto,
+  UrlResponseDto,
+} from './dto/url-response.dto.js';
 import { generateShortCode, RESERVED_CODES } from './short-code.js';
 
 export const MAX_CODE_ATTEMPTS = 5;
-
-export type UrlResponse = Omit<Url, 'userId'> & { shortUrl: string };
-
-export interface Paginated<T> {
-  items: T[];
-  total: number;
-  page: number;
-  limit: number;
-}
 
 @Injectable()
 export class UrlsService {
@@ -40,7 +35,7 @@ export class UrlsService {
     this.shortUrlBase = config.get('SHORT_URL_BASE');
   }
 
-  async create(userId: string, dto: CreateUrlDto): Promise<UrlResponse> {
+  async create(userId: string, dto: CreateUrlDto): Promise<UrlResponseDto> {
     if (dto.alias && RESERVED_CODES.has(dto.alias.toLowerCase())) {
       throw new BadRequestException(`Alias "${dto.alias}" is reserved`);
     }
@@ -71,7 +66,7 @@ export class UrlsService {
   async list(
     userId: string,
     { page, limit, search }: ListUrlsQuery,
-  ): Promise<Paginated<UrlResponse>> {
+  ): Promise<PaginatedUrlsDto> {
     const conditions: SQL[] = [eq(urls.userId, userId)];
     if (search) {
       const pattern = `%${search.replace(/[\\%_]/g, '\\$&')}%`;
@@ -100,7 +95,7 @@ export class UrlsService {
     };
   }
 
-  async findOne(userId: string, id: number): Promise<UrlResponse> {
+  async findOne(userId: string, id: number): Promise<UrlResponseDto> {
     return this.toResponse(await this.findOwned(userId, id));
   }
 
@@ -108,7 +103,7 @@ export class UrlsService {
     userId: string,
     id: number,
     dto: UpdateUrlDto,
-  ): Promise<UrlResponse> {
+  ): Promise<UrlResponseDto> {
     if (dto.url === undefined && dto.expiresAt === undefined) {
       return this.findOne(userId, id);
     }
@@ -155,7 +150,7 @@ export class UrlsService {
     return url;
   }
 
-  private toResponse({ userId: _userId, ...url }: Url): UrlResponse {
+  private toResponse({ userId: _userId, ...url }: Url): UrlResponseDto {
     return { ...url, shortUrl: `${this.shortUrlBase}/${url.code}` };
   }
 }

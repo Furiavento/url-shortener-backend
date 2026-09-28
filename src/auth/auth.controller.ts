@@ -12,6 +12,16 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import {
+  ApiBearerAuth,
+  ApiConflictResponse,
+  ApiCookieAuth,
+  ApiNoContentResponse,
+  ApiOkResponse,
+  ApiTags,
+  ApiTooManyRequestsResponse,
+  ApiUnauthorizedResponse,
+} from '@nestjs/swagger';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import {
@@ -20,12 +30,10 @@ import {
 } from '../common/decorators/current-user.decorator.js';
 import { Public } from '../common/decorators/public.decorator.js';
 import type { Env } from '../config/env.js';
+import { PublicUserDto } from '../users/dto/public-user.dto.js';
 import { UsersService } from '../users/users.service.js';
-import {
-  type AuthResponse,
-  type AuthResult,
-  AuthService,
-} from './auth.service.js';
+import { type AuthResult, AuthService } from './auth.service.js';
+import { AuthResponseDto } from './dto/auth-response.dto.js';
 import { LoginDto } from './dto/login.dto.js';
 import { RegisterDto } from './dto/register.dto.js';
 import {
@@ -37,6 +45,7 @@ import {
 const CREDENTIALS_THROTTLE = { default: { limit: 5, ttl: 60_000 } };
 const REFRESH_THROTTLE = { default: { limit: 20, ttl: 60_000 } };
 
+@ApiTags('auth')
 @Controller('auth')
 export class AuthController {
   constructor(
@@ -45,6 +54,11 @@ export class AuthController {
     private readonly config: ConfigService<Env, true>,
   ) {}
 
+  /** Creates an account and starts a session (sets the refresh cookie). */
+  @ApiConflictResponse({ description: 'Email already registered' })
+  @ApiTooManyRequestsResponse({
+    description: 'More than 5 attempts per minute',
+  })
   @Public()
   @UseGuards(ThrottlerGuard)
   @Throttle(CREDENTIALS_THROTTLE)
@@ -52,10 +66,15 @@ export class AuthController {
   async register(
     @Body() dto: RegisterDto,
     @Res({ passthrough: true }) res: Response,
-  ): Promise<AuthResponse> {
+  ): Promise<AuthResponseDto> {
     return this.respond(res, await this.auth.register(dto));
   }
 
+  /** Starts a session (sets the refresh cookie). */
+  @ApiUnauthorizedResponse({ description: 'Invalid email or password' })
+  @ApiTooManyRequestsResponse({
+    description: 'More than 5 attempts per minute',
+  })
   @Public()
   @UseGuards(ThrottlerGuard)
   @Throttle(CREDENTIALS_THROTTLE)
@@ -64,11 +83,21 @@ export class AuthController {
   async login(
     @Body() dto: LoginDto,
     @Res({ passthrough: true }) res: Response,
-  ): Promise<AuthResponse> {
+  ): Promise<AuthResponseDto> {
     return this.respond(res, await this.auth.login(dto));
   }
 
-  /** Uses the refresh cookie, so it works after the access token expired. */
+  /**
+   * Rotates the refresh cookie and returns a new access token. Works after the
+   * access token expired. Call it with `withCredentials: true`, one at a time:
+   * reusing an already-rotated cookie revokes the whole session.
+   */
+  @ApiCookieAuth('refresh-cookie')
+  @ApiOkResponse({ type: AuthResponseDto })
+  @ApiUnauthorizedResponse({
+    description:
+      'Missing, expired, revoked or reused refresh cookie (the cookie is cleared)',
+  })
   @Public()
   @UseGuards(ThrottlerGuard)
   @Throttle(REFRESH_THROTTLE)
@@ -77,7 +106,7 @@ export class AuthController {
   async refresh(
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
-  ): Promise<AuthResponse> {
+  ): Promise<AuthResponseDto> {
     const token = this.readRefreshCookie(req);
     try {
       if (!token) throw new UnauthorizedException();
@@ -90,6 +119,9 @@ export class AuthController {
     }
   }
 
+  /** Ends the current session and clears the refresh cookie. Always succeeds. */
+  @ApiCookieAuth('refresh-cookie')
+  @ApiNoContentResponse()
   @Public()
   @HttpCode(HttpStatus.NO_CONTENT)
   @Post('logout')
@@ -102,8 +134,11 @@ export class AuthController {
     clearRefreshCookie(res, this.config);
   }
 
+  /** Returns the authenticated user. */
+  @ApiBearerAuth()
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid access token' })
   @Get('me')
-  async me(@CurrentUser() user: JwtPayload) {
+  async me(@CurrentUser() user: JwtPayload): Promise<PublicUserDto> {
     const found = await this.users.findById(user.sub);
     if (!found) throw new NotFoundException('User not found');
     return found;
@@ -117,7 +152,7 @@ export class AuthController {
   private respond(
     res: Response,
     { refresh, ...body }: AuthResult,
-  ): AuthResponse {
+  ): AuthResponseDto {
     setRefreshCookie(res, refresh.token, refresh.expiresAt, this.config);
     return body;
   }

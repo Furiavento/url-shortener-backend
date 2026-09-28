@@ -2,8 +2,9 @@ import { Inject, Injectable } from '@nestjs/common';
 import { eq, getTableColumns } from 'drizzle-orm';
 import { DRIZZLE, type Database } from '../database/database.module.js';
 import { type NewUser, type User, users } from '../database/schema.js';
+import type { PublicUserDto } from './dto/public-user.dto.js';
 
-export type PublicUser = Omit<User, 'passwordHash'>;
+export type PublicUser = PublicUserDto;
 
 const { passwordHash: _passwordHash, ...publicColumns } =
   getTableColumns(users);

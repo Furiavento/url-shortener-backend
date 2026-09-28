@@ -9,52 +9,25 @@ import Bowser from 'bowser';
 import { and, count, desc, eq, gte, lt, sql, type SQL } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import type { Request } from 'express';
-import { createHash } from 'node:crypto';
 import type { Env } from '../config/env.js';
 import { DRIZZLE, type Database } from '../database/database.module.js';
 import { clickEvents, urls } from '../database/schema.js';
+import type {
+  BreakdownDto,
+  DailyClicksDto,
+  OverviewDto,
+  UrlStatsDto,
+} from './dto/analytics-response.dto.js';
 import type { StatsRangeQuery } from './dto/stats-range.query.js';
+import { hashIp } from './ip-hash.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_RANGE_DAYS = 30;
 const MAX_RANGE_DAYS = 366;
 const BREAKDOWN_LIMIT = 10;
 
-// A type alias (not an interface) so it satisfies db.execute's Record constraint.
-export type DailyClicks = {
-  date: string; // YYYY-MM-DD (UTC)
-  clicks: number;
-};
-
-export interface Breakdown {
-  label: string;
-  clicks: number;
-}
-
-export interface UrlStats {
-  from: Date;
-  to: Date;
-  totalClicks: number;
-  clicksByDay: DailyClicks[];
-  topReferrers: Breakdown[];
-  browsers: Breakdown[];
-  os: Breakdown[];
-  devices: Breakdown[];
-}
-
-export interface Overview {
-  totalUrls: number;
-  totalClicks: number;
-  clicksLast30Days: number;
-  topUrls: {
-    id: number;
-    code: string;
-    shortUrl: string;
-    originalUrl: string;
-    clicks: number;
-  }[];
-  clicksByDay: DailyClicks[];
-}
+// A type alias (not a class or interface) so it satisfies db.execute's Record constraint.
+type DailyClicksRow = { date: string; clicks: number };
 
 @Injectable()
 export class AnalyticsService {
@@ -81,11 +54,7 @@ export class AnalyticsService {
         browser: parsed?.browser.name?.slice(0, 50) || null,
         os: parsed?.os.name?.slice(0, 50) || null,
         deviceType: parsed?.platform.type?.slice(0, 20) || null,
-        ipHash: req.ip
-          ? createHash('sha256')
-              .update(req.ip + this.ipHashSalt)
-              .digest('hex')
-          : null,
+        ipHash: req.ip ? hashIp(req.ip, this.ipHashSalt) : null,
       });
       await tx
         .update(urls)
@@ -94,7 +63,7 @@ export class AnalyticsService {
     });
   }
 
-  async overview(userId: string): Promise<Overview> {
+  async overview(userId: string): Promise<OverviewDto> {
     const to = new Date();
     const from = new Date(to.getTime() - DEFAULT_RANGE_DAYS * DAY_MS);
     const ownedByUser = eq(urls.userId, userId);
@@ -144,7 +113,7 @@ export class AnalyticsService {
     userId: string,
     urlId: number,
     range: StatsRangeQuery,
-  ): Promise<UrlStats> {
+  ): Promise<UrlStatsDto> {
     const { from, to } = this.resolveRange(range);
 
     const [owned] = await this.db
@@ -204,9 +173,9 @@ export class AnalyticsService {
     filter: SQL,
     from: Date,
     to: Date,
-  ): Promise<DailyClicks[]> {
+  ): Promise<DailyClicksDto[]> {
     const day = sql`date_trunc('day', ${clickEvents.occurredAt} at time zone 'UTC')`;
-    const result = await this.db.execute<DailyClicks>(sql`
+    const result = await this.db.execute<DailyClicksRow>(sql`
       select to_char(d.day, 'YYYY-MM-DD') as "date",
              coalesce(c.clicks, 0)::int as "clicks"
       from generate_series(
@@ -232,7 +201,7 @@ export class AnalyticsService {
     column: AnyPgColumn,
     where: SQL,
     nullLabel = 'Unknown',
-  ): Promise<Breakdown[]> {
+  ): Promise<BreakdownDto[]> {
     const clicks = count();
     const rows = await this.db
       .select({ label: column, clicks })

@@ -1,0 +1,941 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/api/auth/register": {
+      "post": {
+        "operationId": "Auth_register",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponseDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Email already registered"
+          },
+          "429": {
+            "description": "More than 5 attempts per minute"
+          }
+        },
+        "summary": "Creates an account and starts a session (sets the refresh cookie).",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "operationId": "Auth_login",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid email or password"
+          },
+          "429": {
+            "description": "More than 5 attempts per minute"
+          }
+        },
+        "summary": "Starts a session (sets the refresh cookie).",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/refresh": {
+      "post": {
+        "operationId": "Auth_refresh",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, expired, revoked or reused refresh cookie (the cookie is cleared)"
+          }
+        },
+        "security": [
+          {
+            "refresh-cookie": []
+          }
+        ],
+        "summary": "Rotates the refresh cookie and returns a new access token. Works after the\naccess token expired. Call it with `withCredentials: true`, one at a time:\nreusing an already-rotated cookie revokes the whole session.",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "operationId": "Auth_logout",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "refresh-cookie": []
+          }
+        ],
+        "summary": "Ends the current session and clears the refresh cookie. Always succeeds.",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "operationId": "Auth_me",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicUserDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Returns the authenticated user.",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/urls": {
+      "post": {
+        "operationId": "Urls_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUrlDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UrlResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid body or reserved alias"
+          },
+          "401": {
+            "description": "Missing or invalid access token"
+          },
+          "409": {
+            "description": "Alias already taken"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Creates a short URL. Without `alias`, a random 7-character code is generated.",
+        "tags": [
+          "urls"
+        ]
+      },
+      "get": {
+        "operationId": "Urls_list",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 200,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedUrlsDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Lists the user's URLs, newest first.",
+        "tags": [
+          "urls"
+        ]
+      }
+    },
+    "/api/urls/{id}": {
+      "get": {
+        "operationId": "Urls_findOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UrlResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token"
+          },
+          "404": {
+            "description": "URL not found or not owned by the user"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Gets one of the user's URLs.",
+        "tags": [
+          "urls"
+        ]
+      },
+      "patch": {
+        "operationId": "Urls_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUrlDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UrlResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token"
+          },
+          "404": {
+            "description": "URL not found or not owned by the user"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Updates the destination or expiration. The short code cannot change.",
+        "tags": [
+          "urls"
+        ]
+      },
+      "delete": {
+        "operationId": "Urls_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "Missing or invalid access token"
+          },
+          "404": {
+            "description": "URL not found or not owned by the user"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Deletes the URL and its click history.",
+        "tags": [
+          "urls"
+        ]
+      }
+    },
+    "/api/analytics/overview": {
+      "get": {
+        "operationId": "Analytics_overview",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OverviewDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Dashboard summary across all of the user's URLs.",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/api/analytics/urls/{id}": {
+      "get": {
+        "operationId": "Analytics_urlStats",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "date-time",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UrlStatsDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid range (from >= to or over 366 days)"
+          },
+          "401": {
+            "description": "Missing or invalid access token"
+          },
+          "404": {
+            "description": "URL not found or not owned by the user"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Click statistics for one URL. Defaults to the last 30 days.",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
+    "/api/health": {
+      "get": {
+        "operationId": "Health_check",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthDto"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Database unreachable"
+          }
+        },
+        "summary": "Reports whether the API and its database are reachable.",
+        "tags": [
+          "health"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "URL Shortener API",
+    "description": "API for the URL shortener dashboard. Short links are served by `GET /{code}` on the short-link domain and are not part of this document.",
+    "version": "0.1.0",
+    "contact": {}
+  },
+  "tags": [],
+  "servers": [
+    {
+      "url": "http://localhost:3000",
+      "description": "Local development"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "type": "http"
+      },
+      "refresh-cookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "refresh_token"
+      }
+    },
+    "schemas": {
+      "RegisterDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 255,
+            "format": "email"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 72
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          }
+        },
+        "required": [
+          "email",
+          "password",
+          "name"
+        ]
+      },
+      "UserRole": {
+        "type": "string",
+        "enum": [
+          "user",
+          "admin"
+        ]
+      },
+      "PublicUserDto": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UserRole"
+              }
+            ]
+          },
+          "id": {
+            "type": "string",
+            "example": "5d8cd64a-f031-466f-bac4-c307e42e1483"
+          },
+          "email": {
+            "type": "string",
+            "example": "demo@example.com"
+          },
+          "name": {
+            "type": "string",
+            "example": "Demo User"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "id",
+          "email",
+          "name",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "AuthResponseDto": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string",
+            "description": "JWT to send as `Authorization: Bearer <token>`."
+          },
+          "expiresIn": {
+            "type": "number",
+            "description": "Access token lifetime in seconds.",
+            "example": 900
+          },
+          "user": {
+            "$ref": "#/components/schemas/PublicUserDto"
+          }
+        },
+        "required": [
+          "accessToken",
+          "expiresIn",
+          "user"
+        ]
+      },
+      "LoginDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 72
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
+      },
+      "CreateUrlDto": {
+        "type": "object",
+        "properties": {
+          "alias": {
+            "type": "string",
+            "description": "Custom short code. Reserved: api, health, favicon.ico, robots.txt, assets.",
+            "pattern": "^[A-Za-z0-9_-]{3,16}$",
+            "example": "ng-docs"
+          },
+          "url": {
+            "type": "string",
+            "description": "Destination URL (http or https).",
+            "maxLength": 2048,
+            "format": "uri"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ]
+      },
+      "UrlResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "example": 1
+          },
+          "code": {
+            "type": "string",
+            "example": "ng-docs"
+          },
+          "originalUrl": {
+            "type": "string",
+            "example": "https://angular.dev/overview"
+          },
+          "clicks": {
+            "type": "number",
+            "description": "Total clicks since creation."
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string",
+            "nullable": true,
+            "description": "`null` when the link never expires."
+          },
+          "shortUrl": {
+            "type": "string",
+            "example": "http://localhost:3000/ng-docs"
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "originalUrl",
+          "clicks",
+          "createdAt",
+          "updatedAt",
+          "expiresAt",
+          "shortUrl"
+        ]
+      },
+      "PaginatedUrlsDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UrlResponseDto"
+            }
+          },
+          "total": {
+            "type": "number",
+            "description": "Total matching URLs across all pages."
+          },
+          "page": {
+            "type": "number"
+          },
+          "limit": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "limit"
+        ]
+      },
+      "UpdateUrlDto": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "maxLength": 2048,
+            "format": "uri"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string",
+            "nullable": true,
+            "description": "`null` removes the expiration."
+          }
+        }
+      },
+      "TopUrlDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "code": {
+            "type": "string"
+          },
+          "shortUrl": {
+            "type": "string"
+          },
+          "originalUrl": {
+            "type": "string"
+          },
+          "clicks": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "shortUrl",
+          "originalUrl",
+          "clicks"
+        ]
+      },
+      "DailyClicksDto": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "description": "UTC day.",
+            "example": "2026-09-28"
+          },
+          "clicks": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "date",
+          "clicks"
+        ]
+      },
+      "OverviewDto": {
+        "type": "object",
+        "properties": {
+          "totalUrls": {
+            "type": "number"
+          },
+          "totalClicks": {
+            "type": "number"
+          },
+          "clicksLast30Days": {
+            "type": "number"
+          },
+          "topUrls": {
+            "description": "The user's 5 most clicked URLs.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TopUrlDto"
+            }
+          },
+          "clicksByDay": {
+            "description": "Last 30 days, one entry per UTC day (zero-filled).",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DailyClicksDto"
+            }
+          }
+        },
+        "required": [
+          "totalUrls",
+          "totalClicks",
+          "clicksLast30Days",
+          "topUrls",
+          "clicksByDay"
+        ]
+      },
+      "BreakdownDto": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "Referrer host, browser, OS or device type. `Direct` / `Unknown` when missing.",
+            "example": "Chrome"
+          },
+          "clicks": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "label",
+          "clicks"
+        ]
+      },
+      "UrlStatsDto": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "to": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "totalClicks": {
+            "type": "number",
+            "description": "Clicks within [from, to)."
+          },
+          "clicksByDay": {
+            "description": "One entry per UTC day in the range (zero-filled).",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DailyClicksDto"
+            }
+          },
+          "topReferrers": {
+            "description": "Top 10 referrer hosts.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BreakdownDto"
+            }
+          },
+          "browsers": {
+            "description": "Top 10 browsers.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BreakdownDto"
+            }
+          },
+          "os": {
+            "description": "Top 10 operating systems.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BreakdownDto"
+            }
+          },
+          "devices": {
+            "description": "Top 10 device types (desktop, mobile, tablet...).",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BreakdownDto"
+            }
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "totalClicks",
+          "clicksByDay",
+          "topReferrers",
+          "browsers",
+          "os",
+          "devices"
+        ]
+      },
+      "HealthDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "ok"
+          },
+          "db": {
+            "type": "string",
+            "example": "up"
+          }
+        },
+        "required": [
+          "status",
+          "db"
+        ]
+      }
+    }
+  }
+}
