@@ -1,20 +1,33 @@
 import { z } from 'zod';
 
-const envSchema = z.object({
-  NODE_ENV: z
-    .enum(['development', 'production', 'test'])
-    .default('development'),
-  PORT: z.coerce.number().int().positive().default(3000),
-  DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
-  JWT_SECRET: z.string().min(32),
-  JWT_EXPIRES_IN: z.coerce.number().int().positive().default(3600),
-  IP_HASH_SALT: z.string().min(16),
-  CORS_ORIGIN: z.string().default('http://localhost:4200'),
-  SHORT_URL_BASE: z
-    .url({ protocol: /^https?$/ })
-    .default('http://localhost:3000')
-    .transform((url) => url.replace(/\/+$/, '')),
-});
+const envSchema = z
+  .object({
+    NODE_ENV: z
+      .enum(['development', 'production', 'test'])
+      .default('development'),
+    PORT: z.coerce.number().int().positive().default(3000),
+    DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
+    JWT_SECRET: z.string().min(32),
+    JWT_EXPIRES_IN: z.coerce.number().int().positive().default(900),
+    REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(7),
+    // Defaults to true in production so cookies still work over http://localhost in dev.
+    COOKIE_SECURE: z.stringbool().optional(),
+    COOKIE_SAMESITE: z.enum(['strict', 'lax', 'none']).default('strict'),
+    IP_HASH_SALT: z.string().min(16),
+    CORS_ORIGIN: z.string().default('http://localhost:4200'),
+    SHORT_URL_BASE: z
+      .url({ protocol: /^https?$/ })
+      .default('http://localhost:3000')
+      .transform((url) => url.replace(/\/+$/, '')),
+  })
+  .transform((env) => ({
+    ...env,
+    COOKIE_SECURE: env.COOKIE_SECURE ?? env.NODE_ENV === 'production',
+  }))
+  .refine((env) => env.COOKIE_SAMESITE !== 'none' || env.COOKIE_SECURE, {
+    message: 'COOKIE_SAMESITE=none requires COOKIE_SECURE=true',
+    path: ['COOKIE_SECURE'],
+  });
 
 export type Env = z.infer<typeof envSchema>;
 

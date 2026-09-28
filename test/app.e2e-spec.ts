@@ -126,4 +126,107 @@ describe('URL shortener (e2e)', () => {
   it('returns 404 for unknown short codes', () => {
     return request(http).get('/does-not-exist').expect(404);
   });
+
+  describe('refresh tokens', () => {
+    const credentials = {
+      email: 'session@example.com',
+      password: 'supersecret1',
+    };
+
+    /** Returns the raw `refresh_token=...` pair from a Set-Cookie header. */
+    function refreshCookie(res: request.Response): string {
+      const header = ([] as string[])
+        .concat(res.headers['set-cookie'] ?? [])
+        .find((cookie) => cookie.startsWith('refresh_token='));
+      expect(header).toBeDefined();
+      return header!.split(';')[0];
+    }
+
+    beforeAll(async () => {
+      await request(http)
+        .post('/api/auth/register')
+        .send({ ...credentials, name: 'Session' })
+        .expect(201);
+    });
+
+    it('sets an httpOnly cookie scoped to /api/auth on login', async () => {
+      const res = await request(http)
+        .post('/api/auth/login')
+        .send(credentials)
+        .expect(200);
+
+      expect(res.body).toMatchObject({ expiresIn: expect.any(Number) });
+      expect(res.body).not.toHaveProperty('refresh');
+      const header = ([] as string[]).concat(res.headers['set-cookie']);
+      expect(header[0]).toMatch(/^refresh_token=[\w-]{43};/);
+      expect(header[0]).toMatch(/; Path=\/api\/auth/);
+      expect(header[0]).toMatch(/; HttpOnly/);
+      expect(header[0]).toMatch(/; SameSite=Strict/);
+    });
+
+    it('rotates the token and revokes the session when an old one is reused', async () => {
+      const login = await request(http)
+        .post('/api/auth/login')
+        .send(credentials)
+        .expect(200);
+      const first = refreshCookie(login);
+
+      const refreshed = await request(http)
+        .post('/api/auth/refresh')
+        .set('Cookie', first)
+        .expect(200);
+      const second = refreshCookie(refreshed);
+      expect(second).not.toBe(first);
+      await request(http)
+        .get('/api/auth/me')
+        .set('Authorization', `Bearer ${refreshed.body.accessToken}`)
+        .expect(200)
+        .expect((res) => expect(res.body.email).toBe(credentials.email));
+
+      // Reusing the rotated token is treated as theft: it fails and clears the cookie...
+      const reused = await request(http)
+        .post('/api/auth/refresh')
+        .set('Cookie', first)
+        .expect(401);
+      expect(refreshCookie(reused)).toBe('refresh_token=');
+
+      // ...and the newest token of the same session is revoked as well.
+      await request(http)
+        .post('/api/auth/refresh')
+        .set('Cookie', second)
+        .expect(401);
+    });
+
+    it('keeps other sessions alive when one is revoked', async () => {
+      const a = refreshCookie(
+        await request(http).post('/api/auth/login').send(credentials),
+      );
+      const b = refreshCookie(
+        await request(http).post('/api/auth/login').send(credentials),
+      );
+
+      await request(http).post('/api/auth/logout').set('Cookie', a).expect(204);
+
+      await request(http)
+        .post('/api/auth/refresh')
+        .set('Cookie', a)
+        .expect(401);
+      await request(http)
+        .post('/api/auth/refresh')
+        .set('Cookie', b)
+        .expect(200);
+    });
+
+    it('rejects refresh without a cookie or with an unknown token', async () => {
+      await request(http).post('/api/auth/refresh').expect(401);
+      await request(http)
+        .post('/api/auth/refresh')
+        .set('Cookie', 'refresh_token=not-a-real-token')
+        .expect(401);
+    });
+
+    it('accepts logout without a session', () => {
+      return request(http).post('/api/auth/logout').expect(204);
+    });
+  });
 });
