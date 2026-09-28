@@ -16,6 +16,11 @@ export const DRIZZLE = Symbol('DRIZZLE');
 
 export type Database = NodePgDatabase<typeof schema>;
 
+/** Shared by the Nest provider and standalone scripts (seed). */
+export function createDatabase(pool: Pool): Database {
+  return drizzle({ client: pool, schema, casing: 'snake_case' });
+}
+
 @Injectable()
 class PoolShutdown implements OnApplicationShutdown {
   constructor(@Inject(PG_POOL) private readonly pool: Pool) {}
@@ -37,8 +42,7 @@ class PoolShutdown implements OnApplicationShutdown {
     {
       provide: DRIZZLE,
       inject: [PG_POOL],
-      useFactory: (pool: Pool): Database =>
-        drizzle({ client: pool, schema, casing: 'snake_case' }),
+      useFactory: createDatabase,
     },
     PoolShutdown,
   ],

@@ -15,7 +15,7 @@ export default async function setup(project: TestProject): Promise<void> {
     const db = drizzle({ client: pool });
     await migrate(db, { migrationsFolder: './drizzle' });
     await db.execute(
-      sql`truncate table click_events, urls, users restart identity cascade`,
+      sql`truncate table refresh_tokens, click_events, urls, users restart identity cascade`,
     );
   } finally {
     await pool.end();

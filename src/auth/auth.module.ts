@@ -8,6 +8,7 @@ import { UsersModule } from '../users/users.module.js';
 import { AuthController } from './auth.controller.js';
 import { AuthService } from './auth.service.js';
 import { JwtAuthGuard } from './jwt-auth.guard.js';
+import { RefreshTokensService } from './refresh-tokens.service.js';
 
 @Module({
   imports: [
@@ -23,6 +24,10 @@ import { JwtAuthGuard } from './jwt-auth.guard.js';
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 60 }]),
   ],
   controllers: [AuthController],
-  providers: [AuthService, { provide: APP_GUARD, useClass: JwtAuthGuard }],
+  providers: [
+    AuthService,
+    RefreshTokensService,
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
+  ],
 })
 export class AuthModule {}
