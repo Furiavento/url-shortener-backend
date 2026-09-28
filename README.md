@@ -71,6 +71,7 @@ Las variables se validan al arrancar: si falta alguna o no es válida, la app no
 | `pnpm lint` / `pnpm format` | oxlint / Prettier |
 | `pnpm db:generate --name <nombre>` | Genera una migración a partir de `src/database/schema.ts` |
 | `pnpm db:migrate` | Aplica las migraciones pendientes |
+| `pnpm db:migrate:prod` | Igual, pero desde `dist/` y sin `drizzle-kit`. Lo usa la imagen de producción al arrancar |
 | `pnpm db:studio` | Abre Drizzle Studio para explorar la base |
 | `pnpm db:seed` | Recrea el usuario demo con 12 URLs y ~90 días de clics. No corre en producción |
 | `pnpm openapi` | Regenera `openapi.json` (hazlo cada vez que cambie la API) |
@@ -340,10 +341,25 @@ En los errores de validación (400), `message` es una lista con un mensaje por p
 
 ## Producción
 
-El frontend y los links cortos van en subdominios distintos del mismo dominio, por ejemplo `app.midominio.com` y `s.midominio.com`. Para eso basta con configurar:
+El frontend y los links cortos van en subdominios distintos del mismo dominio: `app.furiavento.cloud` para Angular y `s.furiavento.cloud` para esta API y los links cortos. Como los dos subdominios comparten dominio, el navegador los considera el mismo sitio y la cookie `SameSite=Strict` funciona sin cambios. Usa estos subdominios en los dos servicios en lugar de los `*.traefik.me` que genera Dokploy: si la app y la API no comparten dominio, la cookie de refresh deja de enviarse.
 
-- `NODE_ENV=production`: desactiva Swagger UI y el seed, y activa `COOKIE_SECURE`.
-- `SHORT_URL_BASE`: el subdominio de los links cortos.
-- `CORS_ORIGIN`: el subdominio de Angular.
+### Despliegue en Dokploy
 
-Como los dos subdominios comparten dominio, el navegador los considera el mismo sitio y la cookie `SameSite=Strict` funciona sin cambios.
+1. Crea un servicio **Postgres** en el mismo proyecto y copia su URL de conexión interna.
+2. Crea una **Application** desde este repositorio con build type **Dockerfile**. El `Dockerfile` de la raíz construye con la versión de pnpm de `packageManager`.
+3. Añade estas variables de entorno:
+
+   | Variable | Valor |
+   | --- | --- |
+   | `NODE_ENV` | `production` (ya viene fijada en la imagen) |
+   | `DATABASE_URL` | La URL interna del Postgres de Dokploy |
+   | `JWT_SECRET` | `openssl rand -base64 48` |
+   | `IP_HASH_SALT` | `openssl rand -hex 16` |
+   | `CORS_ORIGIN` | `https://app.furiavento.cloud` |
+   | `SHORT_URL_BASE` | `https://s.furiavento.cloud` |
+
+4. En **Domains**, asigna `s.furiavento.cloud` al puerto `3000` con HTTPS (Let's Encrypt). El registro DNS `A` del subdominio debe apuntar a la IP del VPS.
+
+Al arrancar, el contenedor aplica las migraciones pendientes de `drizzle/` (`pnpm db:migrate:prod`, sin `drizzle-kit`) y luego levanta la API. Si una migración falla, la API no arranca. La imagen trae un `HEALTHCHECK` contra `/api/health`.
+
+`NODE_ENV=production` desactiva Swagger UI y el seed, y activa `COOKIE_SECURE`. Detrás de Traefik, `trust proxy` está en `1`. Si pones Cloudflare en modo proxy delante, súbelo a `2` para que el throttling y el hash de IP vean la IP real.
